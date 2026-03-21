@@ -1,0 +1,10 @@
+langchain
+langchain-classic
+langchain-community
+langchain-chroma
+langchain-openai
+langchain-google-genai
+chromadb
+gradio
+pymupdf
+rank_bm25
