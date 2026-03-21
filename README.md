@@ -131,6 +131,12 @@ Use the **Upload PDF** button in the sidebar or drop PDFs into `books/`.
 - [ ] OCR fallback for scanned PDFs
 - [ ] Answer verification — check student answers against book key
 
+## Known Limitations
+
+- Optimized for text-based PDFs. Scanned PDFs require OCR (not yet supported).
+- Exercise extraction works best with grammar textbooks (Murphy-style format).
+- Math and scientific PDF modes are in development.
+
 ## License
 
 MIT
