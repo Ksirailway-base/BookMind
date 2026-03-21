@@ -123,6 +123,14 @@ Use the **Upload PDF** button in the sidebar or drop PDFs into `books/`.
 | UI | Gradio |
 | PDF Parser | PyMuPDF |
 
+## Planned Features
+
+- [ ] Math textbook support — detect equations and problem sets
+- [ ] Scientific paper mode — Q&A over research papers (abstract, methodology, conclusions)
+- [ ] Book type auto-detection — switch modes automatically based on content
+- [ ] OCR fallback for scanned PDFs
+- [ ] Answer verification — check student answers against book key
+
 ## License
 
 MIT
