@@ -1,6 +1,6 @@
 # BookMind - Local AI teacher for any textbook
 
-[![HuggingFace Demo](https://img.shields.io/badge/🤗%20HuggingFace-Demo-yellow)](https://huggingface.co/spaces/Ksirailway-base/BookMind)
+[![HuggingFace Demo](https://img.shields.io/badge/🤗%20HuggingFace-Demo-yellow)](https://huggingface.co/spaces/Ksirailway/BookMind)
 
 Offline RAG assistant for studying with text-based PDF textbooks. Powered with [**LFM2-2.6B**](https://huggingface.co/LiquidAI/LFM2-2.6B) on board. LFM2 is Liquid AI's hybrid architecture — efficient enough to run on RAM-only machines without a GPU. 
 This project is my first test of LFM2 in a real RAG pipeline, with plans to explore its limits on low-power local servers. More LFM2 experiments coming. 
