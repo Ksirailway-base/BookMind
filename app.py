@@ -10,9 +10,11 @@ HOMEWORK_TRIGGERS = [
 ]
 
 TASK_TRIGGERS = [
+    "give me a homework", "give me homework", "can you give me a homework",
+    "can you give me homework", "some homework", "homework please",
     "give me a task", "give me one task", "give me task",
     "give me another task", "generate a task", "create a task",
-    "exercise", "give me an exercise"
+    "exercise", "give me an exercise", "give me exercise"
 ]
 
 
@@ -172,7 +174,7 @@ with gr.Blocks(title="BookMind") as app:
                     choices=["Local", "OpenAI", "Gemini"],
                     value="Local",
                     label="LLM Provider",
-                    info="Local = llama-server on port 8080",
+                    info="Local = llama-server",
                 )
                 api_key_box = gr.Textbox(label="API Key", placeholder="sk-... or AIza...", type="password", visible=False)
                 model_name_box = gr.Textbox(
@@ -221,12 +223,11 @@ with gr.Blocks(title="BookMind") as app:
         outputs=[msg, chatbot, active_task_state],
     )
 
-    gr.Markdown('<center><small>BookMind • LangChain · Chroma · llama.cpp · Gradio</small></center>')
+    gr.Markdown('<center><small>BookMind • LangChain · Chroma · llama.cpp · Gradio 6</small></center>')
 
 if __name__ == "__main__":
     app.launch(
         server_name="127.0.0.1",
-        server_port=7860,
         share=False,
         inbrowser=True,
         theme=THEME,

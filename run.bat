@@ -2,10 +2,9 @@
 echo Starting Local Book Tutor...
 echo.
 
-:: Try to find a .gguf model and start llama-server
 for %%f in (models\*.gguf) do (
     echo Found model: %%f
-    echo Starting llama-server on port 8080...
+    echo Starting llama-server...
     start "" bin\llama-server.exe -m %%f --port 8080 -ngl 99
     timeout /t 5 /nobreak >nul
     goto :start_app

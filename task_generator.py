@@ -1,5 +1,6 @@
 import re
-
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 def extract_task_from_chunk(text: str) -> dict | None:
     lines = [l.strip() for l in text.split('\n')]
@@ -112,10 +113,40 @@ def extract_task_from_chunk(text: str) -> dict | None:
     return None
 
 
-def extract_and_format_task(chunk_text: str, book: str, page: str) -> str | None:
+def extract_and_format_task(chunk_text: str, book: str, page: str, llm=None) -> str | None:
     task = extract_task_from_chunk(chunk_text)
     if not task:
-        return None
+        if llm:
+            prompt = ChatPromptTemplate.from_template(
+                "You are an English teacher. The following text is raw OCR output from a grammar exercise textbook.\n"
+                "Clean it up and format it into a simple fill-in-the-blank or multiple-choice exercise.\n"
+                "CRITICAL Rules:\n"
+                "- Extract ONLY ONE coherent exercise part if there are multiple.\n"
+                "- REMOVE any instructions or sentences that require looking at pictures (e.g. 'Look at the pictures'), listening to audio, pointing, or partner work.\n"
+                "- Only pick parts that can be solved purely by text.\n"
+                "- Format output nicely with '**Exercise**', the instruction in bold, and nicely numbered sentences.\n"
+                "- Do NOT output any answers. Leave blanks as ______.\n"
+                "- If no text-only exercise can be formed, reply exactly with 'NO_TASK_FOUND'.\n\n"
+                "Raw text:\n{text}\n\nFormatted Exercise:"
+            )
+            try:
+                chain = prompt | llm | StrOutputParser()
+                output = chain.invoke({"text": chunk_text})
+                if not output.strip() or "NO_TASK_FOUND" in output or output == "NO_TASK":
+                    pass # Fall through to raw text fallback or give up
+                else:
+                    return f"{output}\n\n*Source: {book}, p.{page}*"
+            except Exception:
+                pass
+                
+        lines = [l.strip() for l in chunk_text.split('\n') if l.strip()]
+        if len(lines) < 2:
+            return "NO_TASK_FOUND" 
+            
+        output = "**Exercise**\n\n"
+        output += "\n".join(lines)
+        output += f"\n\n*Source: {book}, p.{page}*"
+        return output
 
     output = f"**Exercise {task['exercise']}**\n\n"
     output += f"**{task['instruction']}**\n\n"
