@@ -8,3 +8,4 @@ bin/
 .env
 *.gguf
 *.zip
+*.png
