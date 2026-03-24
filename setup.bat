@@ -66,3 +66,4 @@ echo.
 echo   Run 'run.bat' to start the app.
 echo ============================================
 pause
+pause

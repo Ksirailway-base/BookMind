@@ -8,3 +8,5 @@ chromadb
 gradio>=6.9.0
 pymupdf
 rank_bm25
+sentence-transformers
+torch
