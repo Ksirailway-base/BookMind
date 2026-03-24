@@ -122,9 +122,10 @@ def extract_and_format_task(chunk_text: str, book: str, page: str, llm=None) -> 
                 "Clean it up and format it into a simple fill-in-the-blank or multiple-choice exercise.\n"
                 "CRITICAL Rules:\n"
                 "- Extract ONLY ONE coherent exercise part if there are multiple.\n"
+                "- IMPORTANT: If the textbook provides a list of words or options (a 'WORD BANK') at the top or bottom, you MUST include it.\n"
                 "- REMOVE any instructions or sentences that require looking at pictures (e.g. 'Look at the pictures'), listening to audio, pointing, or partner work.\n"
                 "- Only pick parts that can be solved purely by text.\n"
-                "- Format output nicely with '**Exercise**', the instruction in bold, and nicely numbered sentences.\n"
+                "- Format output nicely with '**Exercise**', the instruction in bold, 'Word bank' (if applicable), and nicely numbered sentences.\n"
                 "- Do NOT output any answers. Leave blanks as ______.\n"
                 "- If no text-only exercise can be formed, reply exactly with 'NO_TASK_FOUND'.\n\n"
                 "Raw text:\n{text}\n\nFormatted Exercise:"
@@ -133,7 +134,7 @@ def extract_and_format_task(chunk_text: str, book: str, page: str, llm=None) -> 
                 chain = prompt | llm | StrOutputParser()
                 output = chain.invoke({"text": chunk_text})
                 if not output.strip() or "NO_TASK_FOUND" in output or output == "NO_TASK":
-                    pass # Fall through to raw text fallback or give up
+                    pass 
                 else:
                     return f"{output}\n\n*Source: {book}, p.{page}*"
             except Exception:

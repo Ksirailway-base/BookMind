@@ -16,6 +16,7 @@ class LocalEmbeddings(Embeddings):
 
 
 _embeddings = None
+_reranker = None
 
 def get_embeddings() -> LocalEmbeddings:
     global _embeddings
@@ -23,6 +24,12 @@ def get_embeddings() -> LocalEmbeddings:
         _embeddings = LocalEmbeddings()
     return _embeddings
 
+def get_reranker():
+    global _reranker
+    if _reranker is None:
+        from sentence_transformers import CrossEncoder
+        _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
+    return _reranker
 
 def get_llm(provider: str = "local", api_key: str = "", model: str = ""):
     if provider == "openai":

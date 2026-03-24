@@ -6,7 +6,7 @@ import fitz
 from langchain_core.documents import Document
 
 CHUNK_SIZE = 1800
-CHUNK_OVERLAP = 300
+CHUNK_OVERLAP = 500
 
 _EXERCISE_NUM_RE = re.compile(r"^\s*(\d{1,2}[\.\)]\s|[a-z][\.\)]\s|•\s|–\s|-\s)")
 
@@ -19,7 +19,8 @@ _EXERCISE_KEYWORDS = re.compile(
     r"make sentence|put the verb|use the word|"
     r"which is correct|match the|cross out|"
     r"write a sentence|complete using|put the word|"
-    r"are these sentences right|correct or incorrect)",
+    r"are these sentences right|correct or incorrect|"
+    r"word bank|choose from these|box|options)",
     re.IGNORECASE,
 )
 _GRAMMAR_KEYWORDS = re.compile(
@@ -53,7 +54,6 @@ def _classify_text_level(
     is_bold: bool,
     median_size: float,
 ) -> str:
-    """Classify a text block into a structural level."""
     if font_size >= median_size * 1.4:
         return "heading_1"
     if font_size >= median_size * 1.15:
@@ -65,11 +65,6 @@ def _classify_text_level(
     return "paragraph"
 
 def _extract_page_blocks(page: fitz.Page) -> list[dict]:
-    """Extract structured text blocks from a single PDF page.
-
-    Returns a list of dicts, each containing:
-      text, bbox, font_size, is_bold, text_level
-    """
     page_dict = page.get_text("dict", sort=True)
     blocks_raw = page_dict.get("blocks", [])
 
@@ -124,11 +119,9 @@ def _extract_page_blocks(page: fitz.Page) -> list[dict]:
     return extracted
 
 def _normalize_heading(text: str) -> str:
-    """Clean up heading text: collapse newlines, strip extra whitespace."""
     return re.sub(r'\s+', ' ', text).strip()
 
 def _update_hierarchy(block: dict, state: dict) -> None:
-    """Update chapter/section tracking based on heading blocks."""
     text = block["text"]
     level = block["text_level"]
 
@@ -141,7 +134,6 @@ def _update_hierarchy(block: dict, state: dict) -> None:
         state["section"] = _normalize_heading(text)
 
 def _is_exercise_start(text: str) -> bool:
-    """Check if text looks like the start of a numbered exercise."""
     return bool(re.match(r"^\s*1[\.\)]\s", text))
 
 _GRAMMAR_TERMS = [
@@ -173,13 +165,11 @@ _TASK_PATTERNS = {
 }
 
 def _extract_grammar_terms(text: str) -> str:
-    """Scan text for grammar terminology. Returns comma-separated string."""
     lower = text.lower()
     found = [t for t in _GRAMMAR_TERMS if t in lower]
     return ", ".join(found) if found else ""
 
 def _detect_task_pattern(text: str, section: str) -> str:
-    """Determine the exercise sub-type."""
     combined = f"{section} {text}"
     for pattern_name, regex in _TASK_PATTERNS.items():
         if regex.search(combined):
@@ -187,7 +177,6 @@ def _detect_task_pattern(text: str, section: str) -> str:
     return "other"
 
 def _classify_content_type(text: str, section: str) -> str:
-    """Classify a chunk's content into a semantic category."""
     combined = f"{section} {text}"
 
     if _EXERCISE_KEYWORDS.search(combined):
@@ -208,7 +197,6 @@ def _flush_chunk(
     page_num: int,
     hierarchy: dict,
 ) -> Document | None:
-    """Combine buffered blocks into a single LangChain Document."""
     if not buffer:
         return None
 
@@ -253,11 +241,6 @@ def _flush_chunk(
     return Document(page_content=combined_text, metadata=metadata)
 
 def parse_pdf(pdf_path: str | Path) -> list[Document]:
-    """Parse a PDF file into structured LangChain Documents.
-
-    Each Document carries rich metadata:
-      book, page, chapter, section, text_level, bbox, font_size_avg
-    """
     path = Path(pdf_path)
     book_name = path.name
     if book_name.lower().endswith(".pdf"):
@@ -282,7 +265,7 @@ def parse_pdf(pdf_path: str | Path) -> list[Document]:
             block_len = len(block["text"])
 
             if buffer_len + block_len > CHUNK_SIZE and buffer:
-                                                                      
+                                                                       
                 if not _is_exercise_start(block["text"]):
                     chunk = _flush_chunk(buffer, book_name, current_page, hierarchy)
                     if chunk:

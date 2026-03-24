@@ -9,7 +9,7 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers import EnsembleRetriever
 from langchain_core.documents import Document
 
-from llm_client import get_embeddings, get_llm, LOCAL_BASE_URL
+from llm_client import get_embeddings, get_llm, get_reranker, LOCAL_BASE_URL
 from prompt_builder import QUESTION_PROMPT, HOMEWORK_PROMPT, GENERATE_TASK_PROMPT
 from task_generator import parse_generated_task, extract_and_format_task
 from pdf_parser import parse_pdf
@@ -56,6 +56,23 @@ def ingest_pdf(pdf_path: str) -> str:
 
     return collection
 
+def _rerank_documents(query: str, documents: list, top_n: int = 5):
+    if not documents: return []
+    reranker = get_reranker()
+    pairs = [[query, doc.page_content] for doc in documents]
+    scores = reranker.predict(pairs)
+    
+    scored_docs = sorted(zip(scores, documents), key=lambda x: x[0], reverse=True)
+    
+    print("\n[RERANK] Ranking Shift Analysis:")
+    for i, (score, doc) in enumerate(scored_docs[:top_n]):
+        orig_idx = documents.index(doc) + 1
+        page = doc.metadata.get("page", "?")
+        change = "UP" if (i+1) < orig_idx else ("DOWN" if (i+1) > orig_idx else "SAME")
+        print(f"  #{i+1} Page {page} | Score: {score:.3f} | Orig Path: #{orig_idx} ({change})")
+        
+    return [doc for score, doc in scored_docs[:top_n]]
+
 def _format_context(docs: list[Document]) -> str:
     parts = []
     for doc in docs:
@@ -94,37 +111,29 @@ def is_book_ingested(book_name: str) -> bool:
     except Exception:
         return False
 
-def _build_retriever(collection: str, chroma_filter: dict | None = None):
-    search_kwargs: dict = {"k": 3}
-    if chroma_filter:
-        search_kwargs["filter"] = chroma_filter
-
+def _build_retriever(collection_name: str, filter_dict: dict = None, k: int = 5):
     vectorstore = Chroma(
-        collection_name=collection,
+        collection_name=collection_name,
         embedding_function=get_embeddings(),
         persist_directory=str(CHROMA_DIR),
     )
-    retriever_chroma = vectorstore.as_retriever(search_kwargs=search_kwargs)
-
-    if chroma_filter:
-        return retriever_chroma, vectorstore
-
-    bm25_path = CHROMA_DIR / f"{collection}_bm25.pkl"
-    if bm25_path.exists():
-        with open(bm25_path, "rb") as f:
-            bm25_retriever = pickle.load(f)
-        bm25_retriever.k = 2
-        ensemble = EnsembleRetriever(
-            retrievers=[retriever_chroma, bm25_retriever], weights=[0.6, 0.4]
-        )
-        return ensemble, vectorstore
-
-    return retriever_chroma, vectorstore
+    
+    chunks = vectorstore.get()
+    documents = [
+        Document(page_content=content, metadata=metadata)
+        for content, metadata in zip(chunks["documents"], chunks["metadatas"])
+    ]
+    bm25_retriever = BM25Retriever.from_documents(documents)
+    
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[vectorstore.as_retriever(search_kwargs={"filter": filter_dict, "k": k}), bm25_retriever],
+        weights=[0.6, 0.4]
+    )
+    return ensemble_retriever, vectorstore
 
 def _enrich_with_related_rules(
     docs: list[Document], vectorstore: Chroma
 ) -> list[Document]:
-    """Parent-Child / Cross-type linking: pull related rules for examples."""
     enriched = list(docs)
     added_sections = set(d.metadata.get("section", "") for d in enriched)
 
@@ -132,7 +141,6 @@ def _enrich_with_related_rules(
         related = doc.metadata.get("related_rule")
         if related and related not in added_sections:
             try:
-                                                      
                 rule_docs = vectorstore.similarity_search(
                     query="rule",
                     k=2,
@@ -215,6 +223,7 @@ def ask(
     chat_history: list | None = None,
     active_task: dict | None = None,
 ) -> tuple[str, dict | None]:
+    print(f"\n{'='*15} RAG REQUEST (RERANK MODE) {'='*15}")
     collection = _collection_name(book_name)
     llm = get_llm(provider=provider, api_key=api_key, model=model)
 
@@ -222,11 +231,12 @@ def ask(
     if mode == "generate_task":
         chroma_filter = {"content_type": "exercise"}
     elif mode == "question":
-                                                              
         chroma_filter = {"content_type": {"$in": ["rule", "reference", "example", "vocabulary"]}}
     
-    retriever, vectorstore = _build_retriever(collection, chroma_filter)
+    retriever, vectorstore = _build_retriever(collection, chroma_filter, k=20)
 
+    print(f"[RAG] Stage 1: Retrieving candidates from {book_name}...")
+    
     history_str = "No previous conversation."
     if chat_history:
         recent_history = chat_history[-24:]
@@ -237,67 +247,37 @@ def ask(
         history_str = "\n".join(formatted)
 
     active_task_str = _format_active_task_context(active_task)
-
     search_question = _contextualize_query(question, history_str, active_task_str, llm)
 
     if mode == "generate_task":
-        seen_pages = set()
-        queries = TASK_QUERIES.copy()
-        random.shuffle(queries)
+        docs = retriever.invoke(search_question)
+        docs = _enrich_with_related_rules(docs, vectorstore)
+        for doc in docs:
+            page = str(doc.metadata.get("page", "?"))
+            book_id = doc.metadata.get("book", "unknown")
+            if book_id.lower().endswith(".pdf"): book_id = book_id[:-4]
+            result = extract_and_format_task(doc.page_content, book_id, page, llm=llm)
+            if result and result != "NO_TASK_FOUND":
+                return result, _build_active_task_context(result, page, book_id)
+        return "No exercise found.", active_task
 
-        for attempt in range(MAX_TASK_RETRIES):
-            search_query = f"{search_question} {queries[attempt % len(queries)]}"
-            all_docs = retriever.invoke(search_query)
+    raw_docs = retriever.invoke(search_question) 
+    if not raw_docs:
+        return "No relevant information found.", active_task
 
-            fresh_docs = [
-                d for d in all_docs
-                if d.metadata.get("page") not in seen_pages
-            ]
-
-            if not fresh_docs:
-                continue
-
-            fresh_docs = _enrich_with_related_rules(fresh_docs, vectorstore)
-
-            for d in fresh_docs:
-                seen_pages.add(d.metadata.get("page"))
-
-            for doc in fresh_docs:
-                page = str(doc.metadata.get("page", "?"))
-                book_id = doc.metadata.get("book", "unknown")
-                if book_id.lower().endswith(".pdf"):
-                    book_id = book_id[:-4]
-
-                result = extract_and_format_task(doc.page_content, book_id, page, llm=llm)
-                if result and result != "NO_TASK_FOUND":
-                    new_active_task = _build_active_task_context(result, page, book_id)
-                    return result, new_active_task
-
-        return "No suitable exercise found. Try asking a grammar question instead.", active_task
-
-    docs = retriever.invoke(search_question)
-
-    if not docs:
-        return "No relevant information found in the book for this query.", active_task
-
-    docs = _enrich_with_related_rules(docs, vectorstore)
+    print(f"[RAG] Stage 2: Reranking {len(raw_docs)} candidates...")
+    docs = _rerank_documents(search_question, raw_docs, top_n=5)
     
+    docs = _enrich_with_related_rules(docs, vectorstore)
     context = _format_context(docs)
 
+    print("[RAG] Stage 3: LLM generation...")
     if mode == "homework":
         chain = HOMEWORK_PROMPT | llm | StrOutputParser()
-        answer = chain.invoke({
-            "context": context,
-            "question": question,
-            "active_task_context": active_task_str,
-        })
-        return answer, active_task
+        answer = chain.invoke({"context": context, "question": question, "active_task_context": active_task_str})
+    else:
+        chain = QUESTION_PROMPT | llm | StrOutputParser()
+        answer = chain.invoke({"context": context, "chat_history": history_str, "question": question, "active_task_context": active_task_str})
 
-    chain = QUESTION_PROMPT | llm | StrOutputParser()
-    answer = chain.invoke({
-        "context": context,
-        "chat_history": history_str,
-        "question": question,
-        "active_task_context": active_task_str,
-    })
-    return answer, active_task
+    print(f"{'='*15} RAG REQUEST END {'='*15}\n")
+    return answer, active_task
