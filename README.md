@@ -9,13 +9,10 @@ This project is my first test of LFM2 in a real RAG pipeline, with plans to expl
 
 ### Key Features
 - **Conversational Memory**: The assistant remembers the last 24 messages (12 queries + 12 replies), allowing you to ask follow-up questions organically (e.g., *"give me a task"* ➔ *"help me solve it"*).
-- **Smart Chunking**: PyMuPDF loader with 1000-token chunks and 150-token overlap to preserve exercise context across page boundaries.
-- **Hybrid Search**: Combines ChromaDB (Vector semantics) with BM25 (Keyword exact match) via `EnsembleRetriever` to guarantee high-precision document retrieval.
-- **Exercise Generator**: Automatically extracts grammar exercises 
-  from textbook pages with regex-based parser. No hallucinations — 
-  exercises are taken directly from the book.
-- **Active Task Context**: The assistant remembers the current exercise 
-  and can explain rules and check answers in context.
+- **Smart Chunking**: PyMuPDF loader with 1800-char chunks and 500-char overlap. Optimized to capture **Word Banks** and exercise instructions together.
+- **Retrieve & Rank**: Two-stage RAG pipeline. Initial Hybrid Search followed by a **Cross-Encoder Reranker** (MiniLM-L6) to ensure the highest semantic accuracy.
+- **Exercise Generator**: Automatically extracts grammar exercises from textbook pages. No hallucinations — exercises are taken directly from the book with all provided options/word banks.
+- **Active Task Context**: The assistant remembers the current exercise and can explain rules and check answers in context.
 ---
 ## Architecture
 
@@ -33,7 +30,8 @@ flowchart LR
         Q["Question"] --> Search["Hybrid Search\n(EnsembleRetriever)"]
         Store --> Search
         Keyword --> Search
-        Search --> Prompt["Prompt +\nTop-4 contexts"]
+        Search --> Rerank["Cross-Encoder\nReranker (Top-5)"]
+        Rerank --> Prompt["Prompt +\nTop-5 contexts"]
         Prompt --> LLM["LLM"]
         LLM --> Answer["Answer +\npage refs"]
     end
@@ -122,8 +120,9 @@ Use the **Upload PDF** button in the sidebar or drop PDFs into `books/`.
 | Embeddings | all-MiniLM-L6-v2 (ONNX, local) |
 | Local LLM | LFM2-2.6B via llama.cpp |
 | Cloud LLM | OpenAI / Gemini (optional) |
+| Reranker | ms-marco-MiniLM-L-6-v2 (local) |
 | UI | Gradio |
-| PDF Parser | PyMuPDF |
+| PDF Parser | PyMuPDF (fitz) |
 
 ## Planned Features
 
