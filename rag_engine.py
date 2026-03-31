@@ -166,6 +166,39 @@ def _extract_rule_context(raw_answer: str) -> str:
         return match.group(1).strip()
     return ""
 
+def _compress_cold_history(cold_history: list) -> str:
+    if not cold_history:
+        return ""
+    
+    pages = set()
+    units = set()
+    
+    for msg in cold_history:
+        if msg.get("role") != "assistant":
+            continue
+            
+        content = msg.get("content", "")
+        found_pages = re.findall(r'p\.(\d+)|page\s+(\d+)', content, re.IGNORECASE)
+        for p1, p2 in found_pages:
+            if p1: pages.add(f"p.{p1}")
+            if p2: pages.add(f"p.{p2}")
+            
+        found_units = re.findall(r'Unit\s+(\d+)', content, re.IGNORECASE)
+        for u in found_units:
+            units.add(f"Unit {u}")
+            
+    if not units and not pages:
+        return ""
+        
+    summary_lines = ["[LESSON HISTORY SUMMARY - DO NOT CITE AS SOURCE]", "Previously discussed topics/pages:"]
+    if units:
+        summary_lines.append(f"- Units: {', '.join(sorted(units))}")
+    if pages:
+        summary_lines.append(f"- Pages: {', '.join(sorted(pages))}")
+    summary_lines.append("[END SUMMARY]")
+    
+    return "\n".join(summary_lines)
+
 def _build_active_task_context(task_text: str, page: str, book_id: str, exercise: str = "?") -> dict:
     return {
         "unit": "?",
@@ -239,12 +272,21 @@ def ask(
     
     history_str = "No previous conversation."
     if chat_history:
-        recent_history = chat_history[-24:]
+        HOT_MEMORY_SIZE = 12
+        hot_history = chat_history[-HOT_MEMORY_SIZE:]
+        cold_history = chat_history[:-HOT_MEMORY_SIZE]
+        
+        summary_str = _compress_cold_history(cold_history)
+        
         formatted = []
-        for msg in recent_history:
+        for msg in hot_history:
             role = "User" if msg["role"] == "user" else "Assistant"
             formatted.append(f"{role}: {msg['content']}")
-        history_str = "\n".join(formatted)
+            
+        if summary_str:
+            history_str = summary_str + "\n\n[RECENT CHAT]\n" + "\n".join(formatted)
+        else:
+            history_str = "\n".join(formatted)
 
     active_task_str = _format_active_task_context(active_task)
     search_question = _contextualize_query(question, history_str, active_task_str, llm)
@@ -280,4 +322,4 @@ def ask(
         answer = chain.invoke({"context": context, "chat_history": history_str, "question": question, "active_task_context": active_task_str})
 
     print(f"{'='*15} RAG REQUEST END {'='*15}\n")
-    return answer, active_task
+    return answer, active_task

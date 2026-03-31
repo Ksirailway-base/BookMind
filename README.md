@@ -8,7 +8,7 @@ This project is my first test of LFM2 in a real RAG pipeline, with plans to expl
 > Upload a book, ask questions, get answers with page references. Everything runs locally via llama.cpp. Optionally switch to OpenAI or Gemini via API key.
 
 ### Key Features
-- **Conversational Memory**: The assistant remembers the last 24 messages (12 queries + 12 replies), allowing you to ask follow-up questions organically (e.g., *"give me a task"* ➔ *"help me solve it"*).
+- **Conversational Memory**: Implements a **Two-Tier Summary Buffer**. It keeps the last 12 messages "hot" (word-for-word) and automatically compresses older history into a lightweight summary block (extracting discussed topics and pages). This prevents context overflow while maintaining long-term session memory.
 - **Smart Chunking**: PyMuPDF loader with 1800-char chunks and 500-char overlap. Optimized to capture **Word Banks** and exercise instructions together.
 - **Retrieve & Rank**: Two-stage RAG pipeline. Initial Hybrid Search followed by a **Cross-Encoder Reranker** (MiniLM-L6) to ensure the highest semantic accuracy.
 - **Exercise Generator**: Automatically extracts grammar exercises from textbook pages. No hallucinations — exercises are taken directly from the book with all provided options/word banks.
