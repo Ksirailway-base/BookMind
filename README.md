@@ -7,7 +7,16 @@ This project is my first test of LFM2 in a real RAG pipeline, with plans to expl
 ![BookMind Demo](docs/intro.gif)
 > Upload a book, ask questions, get answers with page references. Everything runs locally via llama.cpp. Optionally switch to OpenAI or Gemini via API key.
 
+---
+
+## 🌟 Featured In
+
+This project is officially featured in the [**Liquid4All Cookbook**](https://github.com/Liquid4All/cookbook) as a comprehensive example of a complex RAG application built with Liquid AI models.
+
+---
+
 ### Key Features
+
 - **Conversational Memory**: Implements a **Two-Tier Summary Buffer**. It keeps the last 12 messages "hot" (word-for-word) and automatically compresses older history into a lightweight summary block (extracting discussed topics and pages). This prevents context overflow while maintaining long-term session memory.
 - **Smart Chunking**: PyMuPDF loader with 1800-char chunks and 500-char overlap. Optimized to capture **Word Banks** and exercise instructions together.
 - **Retrieve & Rank**: Two-stage RAG pipeline. Initial Hybrid Search followed by a **Cross-Encoder Reranker** (MiniLM-L6) to ensure the highest semantic accuracy.
